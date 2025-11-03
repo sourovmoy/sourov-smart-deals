@@ -1,14 +1,13 @@
 const express = require("express");
 const cors = require("cors");
+require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
 const port = process.env.PORT || 3000;
-
 app.use(cors());
 app.use(express.json());
 
-const uri =
-  "mongodb+srv://smart-deals-user:yJPKXj23TPTZABCT@cluster0.yh8mwoi.mongodb.net/?appName=Cluster0";
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.yh8mwoi.mongodb.net/?appName=Cluster0`;
 
 const client = new MongoClient(uri, {
   serverApi: {
@@ -25,12 +24,30 @@ app.get("/", (req, res) => {
 async function run() {
   try {
     await client.connect();
-
     const database = client.db("smartDeals");
     const productsCollection = database.collection("products");
+    const bidsCollection = database.collection("bids");
+    const userCollection = database.collection("user");
 
     app.get("/products", async (req, res) => {
-      const cursor = productsCollection.find();
+      const email = req.query.email;
+      const query = {};
+      if (email) {
+        query.email = email;
+      }
+      const cursor = productsCollection.find(query);
+      // .sort({ price_min: 1 });
+      const products = await cursor.toArray();
+      res.send(products);
+    });
+
+    app.get("/recent-products", async (req, res) => {
+      const cursor = productsCollection
+        .find()
+        .sort({
+          created_at: -1,
+        })
+        .limit(6);
       const products = await cursor.toArray();
       res.send(products);
     });
@@ -70,8 +87,65 @@ async function run() {
     app.delete("/products/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
+
       const result = await productsCollection.deleteOne(query);
       res.send(result);
+    });
+
+    // Bids APIs
+
+    app.get("/myBids", async (req, res) => {
+      const email = req.query.email;
+      const query = {};
+      if (email) {
+        query.buyer_email = email;
+      }
+      const cursor = bidsCollection.find(query);
+      const bids = await cursor.toArray();
+      res.send(bids);
+    });
+    app.get("/products/bids/:productId", async (req, res) => {
+      const productId = req.params.productId;
+      const query = { product: productId };
+      const cursor = bidsCollection.find(query).sort({ bid_price: -1 });
+      const bids = await cursor.toArray();
+      res.send(bids);
+    });
+
+    app.get("/bids/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+
+      const result = await bidsCollection.findOne(query);
+      res.send(result);
+    });
+
+    app.post("/bids", async (req, res) => {
+      const bid = req.body;
+      const result = await bidsCollection.insertOne(bid);
+      res.send(result);
+    });
+
+    app.delete("/bids/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+
+      const result = await bidsCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    // user api
+    app.post("/users", async (req, res) => {
+      const user = req.body;
+      const email = req.body.email;
+      const query = { email: email };
+      const existingUser = await userCollection.findOne(query);
+      if (existingUser) {
+        res.send({ message: "have" });
+      } else {
+        const result = await userCollection.insertOne(user);
+        res.send(result);
+      }
     });
 
     await client.db("admin").command({ ping: 1 });
