@@ -26,7 +26,6 @@ const verify = async (req, res, next) => {
   try {
     const userInfo = await admin.auth().verifyIdToken(token);
     req.token_email = userInfo.email;
-
     next();
   } catch {
     return res.status(401).send({ message: "Unauthorized access" });
@@ -133,7 +132,7 @@ async function run() {
       const bids = await cursor.toArray();
       res.send(bids);
     });
-    app.get("/products/bids/:productId", async (req, res) => {
+    app.get("/products/bids/:productId", verify, async (req, res) => {
       const productId = req.params.productId;
       const query = { product: productId };
       const cursor = bidsCollection.find(query).sort({ bid_price: -1 });
@@ -149,7 +148,7 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/bids", async (req, res) => {
+    app.post("/bids", verify, async (req, res) => {
       const bid = req.body;
       const result = await bidsCollection.insertOne(bid);
       res.send(result);
